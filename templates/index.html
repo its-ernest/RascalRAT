@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RascalRAT Control Panel</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #238636;
+            --accent-hover: #2ea043;
+            --terminal-bg: #010409;
+            --terminal-text: #39ff14; /* Matrix Green */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 2rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+
+        header {
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        input[type="text"], select, textarea {
+            width: 100%;
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 0.75rem;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, select:focus, textarea:focus {
+            border-color: #58a6ff;
+        }
+
+        textarea {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .row .form-group {
+            flex: 1;
+        }
+
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: 1px solid rgba(240,246,252,0.1);
+            border-radius: 6px;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button:disabled {
+            background-color: var(--border-color);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .output-container {
+            margin-top: 1.5rem;
+        }
+
+        .terminal-header {
+            background-color: var(--border-color);
+            padding: 0.5rem 1rem;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--text-main);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .terminal {
+            background-color: var(--terminal-bg);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            padding: 1rem;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.85rem;
+            color: var(--terminal-text);
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .status-bar {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .status-success { color: #58a6ff; }
+        .status-error { color: #f85149; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>RascalRAT Orchestration Console</h1>
+        <p>Dispatch synchronous administrative payloads over active WebSocket tunnels</p>
+    </header>
+
+    <form id="taskForm">
+        <div class="row">
+            <div class="form-group">
+                <label for="nodeId">Target Node ID</label>
+                <input type="text" id="nodeId" value="win-vbox-01" required placeholder="e.g., win-vbox-01">
+            </div>
+            <div class="form-group">
+                <label for="payloadType">Execution Subsystem</label>
+                <select id="payloadType">
+                    <option value="powershell">PowerShell Engine</option>
+                    <option value="cmd">Command Prompt Fallback</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="scriptBlock">Instruction Script Block</label>
+            <textarea id="scriptBlock" required placeholder="Get-Process | Select-Object Name, CPU -First 5"></textarea>
+        </div>
+
+        <button type="submit" id="submitBtn">Execute Command</button>
+    </form>
+
+    <div class="output-container">
+        <div class="terminal-header">
+            <span>TERMINAL OUTPUT ONSCREEN</span>
+            <span id="executionTime">Duration: 0ms</span>
+        </div>
+        <div class="terminal" id="terminalOutput">Awaiting target system deployment context...</div>
+        <div class="status-bar">
+            <span id="exitStatus">Exit Code: --</span>
+            <span id="networkStatus"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('taskForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const nodeId = document.getElementById('nodeId').value.trim();
+        const payloadType = document.getElementById('payloadType').value;
+        const scriptBlock = document.getElementById('scriptBlock').value;
+        
+        const submitBtn = document.getElementById('submitBtn');
+        const terminal = document.getElementById('terminalOutput');
+        const execTimeLabel = document.getElementById('executionTime');
+        const exitStatusLabel = document.getElementById('exitStatus');
+        const networkStatusLabel = document.getElementById('networkStatus');
+
+        // Prevent double submission patterns
+        submitBtn.disabled = true;
+        terminal.textContent = `[+] Packaging task mapping payload...\n[+] Dispatched instruction packet to node: ${nodeId}\n[+] Blocking HTTP thread waiting for WebSocket response framework...`;
+        terminal.style.color = 'var(--text-main)';
+        
+        // Generate a cryptographically random short task tracking string identifier
+        const taskId = "task-" + Math.random().toString(36).substring(2, 7);
+
+        const targetUrl = `http://localhost:8080/nodes/${nodeId}/task`;
+
+        const payload = {
+            task_id: taskId,
+            payload_type: payloadType,
+            script_block: scriptBlock,
+            timeout: 10000000000 // 10 Second timeout window in nanoseconds
+        };
+
+        try {
+            const response = await fetch(targetUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // If task executed successfully through the target process block
+                if (data.success) {
+                    terminal.textContent = data.stdout || "[✓] Script executed successfully with empty standard return streams.";
+                    terminal.style.color = 'var(--terminal-text)';
+                } else {
+                    // Task failed inside the agent subshell wrapper
+                    terminal.textContent = `[!] Target Application Error:\n${data.error_message || ''}\n\n[!] Standard Error Output:\n${data.stderr || ''}\n\n[!] Partial Output Stream:\n${data.stdout || ''}`;
+                    terminal.style.color = 'var(--status-error)';
+                }
+                
+                // Render operational execution metadata metrics
+                exitStatusLabel.textContent = `Exit Code: ${data.exit_code}`;
+                execTimeLabel.textContent = `Duration: ${(data.duration / 1000000).toFixed(2)}ms`;
+                networkStatusLabel.textContent = "[REST API Status: 200 OK]";
+                networkStatusLabel.className = "status-bar status-success";
+
+            } else {
+                // Handle API Gateway Infrastructure Error drops (e.g., 404 Node Offline, 504 Timeout)
+                terminal.textContent = `[CRITICAL SERVER FAULT]\nStatus: ${response.status}\nError: ${data.error || 'Unknown gateway mapping exception error'}`;
+                terminal.style.color = '#f85149';
+                exitStatusLabel.textContent = `Exit Code: --`;
+                execTimeLabel.textContent = `Duration: --`;
+                networkStatusLabel.textContent = `[REST API Status: ${response.status}]`;
+                networkStatusLabel.className = "status-bar status-error";
+            }
+
+        } catch (err) {
+            // Handle local routing block drops (e.g., server isn't running at all)
+            terminal.textContent = `[LOCAL NETWORK BLOCK DROP]\nFailed to connect to local gateway infrastructure interface at: http://localhost:8080\nVerify that the Echo v5 service engine binary is actively executing.\n\nDetails: ${err.message}`;
+            terminal.style.color = '#f85149';
+            exitStatusLabel.textContent = `Exit Code: --`;
+            execTimeLabel.textContent = `Duration: --`;
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
