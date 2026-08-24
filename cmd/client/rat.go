@@ -107,6 +107,8 @@ func executeAndReply(ctx context.Context, conn *websocket.Conn, task protocol.Ta
 		cmd = exec.CommandContext(execCtx, "cmd.exe", "/c", task.ScriptBlock)
 	}
 
+	applyHiddenWindow(cmd)
+
 	// CombinedOutput safely captures both stdout and stderr into a single slice natively
 	outputBytes, err := cmd.CombinedOutput()
 
