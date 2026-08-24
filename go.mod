@@ -1,6 +1,6 @@
 module github.com/its-ernest/RascalRAT
 
-go 1.26.3
+go 1.25.0
 
 require (
 	github.com/coder/websocket v1.8.14

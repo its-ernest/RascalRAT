@@ -26,6 +26,7 @@ build-server: | $(BINARY_DIR) ## Build the Echo management control server native
 
 build-client: | $(BINARY_DIR) ## Cross-compile the client daemon executable specifically for Windows
 	@echo "==> Cross-compiling administration daemon for Windows (amd64)..."
+	@cp config.txt $(SRC_CLIENT)/config.txt
 	@env GOOS=windows GOARCH=amd64 go build $(LDFLAGS_WINDOWS) -o $(BINARY_CLIENT) $(SRC_CLIENT)
 	@echo "      [+] Windows daemon compiled at: $(BINARY_CLIENT)"
 

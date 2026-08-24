@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RascalRAT Control Panel</title>
+    <title>Remote Administration Tool</title>
     <style>
         :root {
             --bg-primary: #0d1117;
@@ -14,7 +14,7 @@
             --accent: #238636;
             --accent-hover: #2ea043;
             --terminal-bg: #010409;
-            --terminal-text: #39ff14; /* Matrix Green */
+            --terminal-text: #39ff14;
         }
 
         * {
@@ -172,8 +172,8 @@
 
 <div class="container">
     <header>
-        <h1>RascalRAT Orchestration Console</h1>
-        <p>Dispatch synchronous administrative payloads over active WebSocket tunnels</p>
+        <h1>Remote Shell</h1>
+        <p>Execute administrative payloads on target Node</p>
     </header>
 
     <form id="taskForm">
@@ -186,7 +186,7 @@
                 <label for="payloadType">Execution Subsystem</label>
                 <select id="payloadType">
                     <option value="powershell">PowerShell Engine</option>
-                    <option value="cmd">Command Prompt Fallback</option>
+                    <option value="cmd">CMD - Fallback</option>
                 </select>
             </div>
         </div>
