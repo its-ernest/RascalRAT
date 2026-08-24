@@ -28,15 +28,34 @@ func runMainApplication() {
 
 	serverURL := resolveServerURL()
 
-	// Persistent network connectivity loop
+	const (
+		baseDelay = 2 * time.Second
+		maxDelay  = 5 * time.Minute
+	)
+
+	// Persistent network connectivity loop with exponential backoff.
+	// Backoff grows when the upstream is unreachable, and resets to the
+	// base delay whenever a connection was actually established (then later
+	// dropped), so a transient disconnect recovers quickly.
+	backoff := baseDelay
 	for {
 		slog.Info("attempting connection upstream", "url", serverURL)
-		err := establishControlLine(serverURL)
+		connected, err := establishControlLine(serverURL)
 		if err != nil {
-			slog.Error("control line handshake failed, retrying in 5 seconds", "err", err)
-			time.Sleep(5 * time.Second)
+			if connected {
+				slog.Error("control line dropped, reconnecting immediately", "err", err)
+				backoff = baseDelay
+			} else {
+				slog.Error("control line handshake failed, retrying with backoff", "err", err, "delay", backoff)
+			}
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > maxDelay {
+				backoff = maxDelay
+			}
 			continue
 		}
+		backoff = baseDelay
 	}
 }
 
@@ -61,7 +80,11 @@ func resolveServerURL() string {
 	return urlStr
 }
 
-func establishControlLine(urlStr string) error {
+// establishControlLine dials the upstream and processes tasks until the
+// connection ends. The returned bool reports whether the dial itself
+// succeeded, allowing the caller to distinguish an unreachable upstream
+// from a connection that was established and later dropped.
+func establishControlLine(urlStr string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -71,12 +94,12 @@ func establishControlLine(urlStr string) error {
 	opts := &websocket.DialOptions{HTTPHeader: header}
 	conn, _, err := websocket.Dial(ctx, urlStr, opts)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "daemon terminating connection")
 
 	slog.Info("established connection pipeline with control plane")
-	return runExecutionProcessor(context.Background(), conn)
+	return true, runExecutionProcessor(context.Background(), conn)
 }
 
 func runExecutionProcessor(ctx context.Context, conn *websocket.Conn) error {

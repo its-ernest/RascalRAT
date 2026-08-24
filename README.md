@@ -41,10 +41,12 @@ clear && ./bin/server
 
 ## How to configure
 
-1. Without a remote server, you can't manage remote devices, Setup a Domain or Tunnel URL and store it in config.txt with the command below or manually:
+1. Without a remote server, you can't manage remote devices, Setup a Domain or Tunnel URL on port 8080 and store it in config.txt with the command below or manually:
 
 ```bash
-# replace the URL with your Tunnel URL
+# replace '<tunnel-url>' part with your Tunnel URL
+# `?id` parameter specifies the name that the client.exe should use. 
+# If you wanna remotely administer another computer, change the id and compile again
 echo "https://s5kz6tdx9.localto.net/ws/connect?id=windows-pc-1" > config.txt
 ```
 
@@ -60,7 +62,7 @@ make build
 
 ```bash
 # execute
-./bin/server
+./bin/server # NOTE: This runs on PORT '8080'
 ```
 5. Make sure you have started your preferred Tunnel, such as Localtonet, Ngrok, etc.
 
