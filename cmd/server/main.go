@@ -58,6 +58,12 @@ func main() {
 	e.GET("/status", handleStatus)
 
 	// Node Management and Task Execution Endpoints
+	e.GET("/nodes", func(c *echo.Context) error {
+		return handleListNodes(c, hub)
+	})
+	e.POST("/nodes/task", func(c *echo.Context) error {
+		return handleDispatchTaskMulti(c, hub)
+	})
 	e.POST("/nodes/:id/task", func(c *echo.Context) error {
 		return handleDispatchTask(c, hub)
 	})

@@ -44,11 +44,13 @@ clear && ./bin/server
 1. Without a remote server, you can't manage remote devices, Setup a Domain or Tunnel URL on port 8080 and store it in config.txt with the command below or manually:
 
 ```bash
-# replace '<tunnel-url>' part with your Tunnel URL
-# `?id` parameter specifies the name that the client.exe should use. 
-# If you wanna remotely administer another computer, change the id and compile again
-echo "https://s5kz6tdx9.localto.net/ws/connect?id=windows-pc-1" > config.txt
+# replace 'https://s5kz6tdx9.localto.net' part with your Tunnel URL
+echo "https://s5kz6tdx9.localto.net" > config.txt
 ```
+
+In the v1.2+, there is no need to add `/ws/connect/?id` to the URL, 
+Each client node automatically attaches its ID in the connection request.
+This enhances the 'Compile once. Share everywhere'.
 
 2. Build again to make sure that the Makefile process ports the new config.txt into the executable binary
 

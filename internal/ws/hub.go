@@ -3,6 +3,7 @@ package ws
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 )
@@ -10,6 +11,13 @@ import (
 type Hub struct {
 	mu       sync.RWMutex
 	sessions map[string]*AgentSession
+}
+
+// NodeInfo is a lightweight, serializable view of a connected agent used by
+// the administration console to render the client roster.
+type NodeInfo struct {
+	ID        string    `json:"id"`
+	Connected time.Time `json:"connected"`
 }
 
 func NewHub() *Hub {
@@ -50,6 +58,18 @@ func (h *Hub) GetSession(id string) (*AgentSession, error) {
 		return nil, errors.New("requested endpoint agent is currently offline")
 	}
 	return session, nil
+}
+
+// List returns a snapshot of all currently connected agent nodes.
+func (h *Hub) List() []NodeInfo {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	infos := make([]NodeInfo, 0, len(h.sessions))
+	for id, session := range h.sessions {
+		infos = append(infos, NodeInfo{ID: id, Connected: session.Connected})
+	}
+	return infos
 }
 
 func (h *Hub) CloseAll(reason string) {
