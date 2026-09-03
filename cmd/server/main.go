@@ -85,7 +85,7 @@ func main() {
 
 	addr := os.Getenv("PORT")
 	if addr == "" {
-		addr = ":6000"
+		addr = ":8182"
 	} else if !strings.HasPrefix(addr, ":") {
 		addr = ":" + addr
 	}
