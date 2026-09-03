@@ -51,6 +51,9 @@ func main() {
 
 	hub := ws.NewHub()
 
+	initAuthRoutes(e)
+	applyAuthMiddleware(e)
+
 	// Operational REST Endpoints
 	e.GET("/", func(c *echo.Context) error {
 		return c.Render(http.StatusOK, "index.html", map[string]any{"Title": "RascalRAT Console"})
